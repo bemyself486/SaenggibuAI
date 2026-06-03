@@ -15,8 +15,9 @@ st.info("학년군과 학생수를 설정하고 키워드를 입력하면, 전�
 if "result_data" not in st.session_state:
     st.session_state.result_data = None
 
-if "student_df" not in st.session_state:
-    st.session_state.student_df = pd.DataFrame({
+# [수정] 원본 도화지 역할을 할 base_df를 만듭니다.
+if "base_df" not in st.session_state:
+    st.session_state.base_df = pd.DataFrame({
         "번호": [str(i) for i in range(1, 21)], 
         "관찰 키워드": [""] * 20
     })
@@ -24,17 +25,18 @@ if "student_df" not in st.session_state:
 st.sidebar.header("⚙️ 기본 설정")
 grade_group = st.sidebar.selectbox("학년군을 선택하세요", ["1~2학년군", "3~4학년군", "5~6학년군"])
 
-num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=len(st.session_state.student_df), step=1)
+num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=len(st.session_state.base_df), step=1)
 
-if num_students > len(st.session_state.student_df):
-    extra_count = num_students - len(st.session_state.student_df)
+# 학생 수가 바뀌었을 때만 도화지(base_df) 크기를 조절합니다.
+if num_students > len(st.session_state.base_df):
+    extra_count = num_students - len(st.session_state.base_df)
     extra_df = pd.DataFrame({
-        "번호": [str(i) for i in range(len(st.session_state.student_df) + 1, num_students + 1)],
+        "번호": [str(i) for i in range(len(st.session_state.base_df) + 1, num_students + 1)],
         "관찰 키워드": [""] * extra_count
     })
-    st.session_state.student_df = pd.concat([st.session_state.student_df, extra_df], ignore_index=True)
-elif num_students < len(st.session_state.student_df):
-    st.session_state.student_df = st.session_state.student_df.iloc[:num_students]
+    st.session_state.base_df = pd.concat([st.session_state.base_df, extra_df], ignore_index=True)
+elif num_students < len(st.session_state.base_df):
+    st.session_state.base_df = st.session_state.base_df.iloc[:num_students]
 
 with st.sidebar.expander("🛠️ 비상용 고급 설정 (클릭)"):
     st.caption("사용자가 몰려 서버의 일일 무료 한도가 초과된 경우, 본인의 API 키를 직접 입력하면 계속 사용할 수 있습니다.")
@@ -75,17 +77,17 @@ def get_system_prompt(grade_group):
 
 st.markdown("### 📋 학생별 관찰 키워드 입력표")
 
-# [핵심] 선생님의 요청대로 width=1000을 명시하여 넓게 꽉 채우도록 설정했습니다. (데이터 보존을 위해 st.session_state.student_df 적용)
+# [핵심] key="student_table" 이라는 이름표를 달아주어, 스트림릿이 타자 치는 내용을 절대 까먹지 않게 고정합니다!
 edited_df = st.data_editor(
-    st.session_state.student_df,
+    st.session_state.base_df,
+    key="student_table",
     column_config={
         "번호": st.column_config.TextColumn("번호", disabled=True, width=50),
         "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width=1000)
     },
     hide_index=True, use_container_width=True
 )
-
-st.session_state.student_df = edited_df
+# [핵심] 엎어치기 하던 코드(st.session_state = edited_df)를 삭제하여 무한 새로고침 버그를 완벽히 막았습니다.
 
 st.markdown("---")
 
@@ -203,7 +205,6 @@ if st.button("🚀 전체 학생 행특 생성하기"):
 if st.session_state.result_data is not None:
     st.success("🎉 생성 완료! 표의 내용을 확인하시고 엑셀 파일로 꼭 다운로드하세요.")
     
-    # 결과 표도 동일하게 1000픽셀 적용
     st.dataframe(
         st.session_state.result_data, 
         column_config={
