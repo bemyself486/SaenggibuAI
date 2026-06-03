@@ -58,15 +58,15 @@ def get_system_prompt(grade_group):
 
 st.markdown("### 📋 학생별 관찰 키워드 입력표")
 
-# 번호는 문자로 변환하여 강제 왼쪽 정렬
+# 번호를 숫자가 아닌 '문자(str)'로 강제 변환하여 무조건 왼쪽으로 붙게 만듭니다.
 df = pd.DataFrame({"번호": [str(i) for i in range(1, num_students + 1)], "관찰 키워드": [""] * num_students})
 
-# [핵심] 번호칸은 50픽셀 고정! 관찰키워드 칸은 width 설정을 지워버려서 남는 공간을 블랙홀처럼 다 흡수하게 만듭니다.
+# [핵심] 스트림릿이 번호 칸을 늘리지 못하도록 width=50으로 꽉 묶어버리고, 키워드 칸에 1000을 주어 남은 공간을 모두 몰아줍니다.
 edited_df = st.data_editor(
     df,
     column_config={
         "번호": st.column_config.TextColumn("번호", disabled=True, width=50),
-        "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150)
+        "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width=1000)
     },
     hide_index=True, use_container_width=True
 )
@@ -174,6 +174,7 @@ if st.button("🚀 전체 학생 행특 생성하기"):
     if current_num is not None:
         parsed_results[current_num] = "\n".join(current_text).strip()
         
+    # 결과 처리 시에도 번호를 문자로 인식하여 매칭합니다.
     for num, text in parsed_results.items():
         str_num = str(num)
         if str_num in result_df["번호"].values:
@@ -187,12 +188,12 @@ if st.button("🚀 전체 학생 행특 생성하기"):
 if st.session_state.result_data is not None:
     st.success("🎉 생성 완료! 표의 내용을 확인하시고 엑셀 파일로 꼭 다운로드하세요.")
     
-    # 결과 출력 표에도 동일한 반응형 비율 적용
+    # 결과 출력 표 역시 번호 칸은 최소화, 결과 칸은 최대로 고정합니다.
     st.dataframe(
         st.session_state.result_data, 
         column_config={
             "번호": st.column_config.TextColumn("번호", width=50),
-            "생성된 행특 (결과)": st.column_config.TextColumn("생성된 행특 (결과)")
+            "생성된 행특 (결과)": st.column_config.TextColumn("생성된 행특 (결과)", width=1000)
         },
         hide_index=True, 
         use_container_width=True
