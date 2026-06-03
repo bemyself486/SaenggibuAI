@@ -15,9 +15,26 @@ st.info("학년군과 학생수를 설정하고 키워드를 입력하면, 전�
 if "result_data" not in st.session_state:
     st.session_state.result_data = None
 
+if "student_df" not in st.session_state:
+    st.session_state.student_df = pd.DataFrame({
+        "번호": [str(i) for i in range(1, 21)], 
+        "관찰 키워드": [""] * 20
+    })
+
 st.sidebar.header("⚙️ 기본 설정")
 grade_group = st.sidebar.selectbox("학년군을 선택하세요", ["1~2학년군", "3~4학년군", "5~6학년군"])
-num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=20, step=1)
+
+num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=len(st.session_state.student_df), step=1)
+
+if num_students > len(st.session_state.student_df):
+    extra_count = num_students - len(st.session_state.student_df)
+    extra_df = pd.DataFrame({
+        "번호": [str(i) for i in range(len(st.session_state.student_df) + 1, num_students + 1)],
+        "관찰 키워드": [""] * extra_count
+    })
+    st.session_state.student_df = pd.concat([st.session_state.student_df, extra_df], ignore_index=True)
+elif num_students < len(st.session_state.student_df):
+    st.session_state.student_df = st.session_state.student_df.iloc[:num_students]
 
 with st.sidebar.expander("🛠️ 비상용 고급 설정 (클릭)"):
     st.caption("사용자가 몰려 서버의 일일 무료 한도가 초과된 경우, 본인의 API 키를 직접 입력하면 계속 사용할 수 있습니다.")
@@ -58,18 +75,17 @@ def get_system_prompt(grade_group):
 
 st.markdown("### 📋 학생별 관찰 키워드 입력표")
 
-# 번호를 숫자가 아닌 '문자(str)'로 강제 변환하여 무조건 왼쪽으로 붙게 만듭니다.
-df = pd.DataFrame({"번호": [str(i) for i in range(1, num_students + 1)], "관찰 키워드": [""] * num_students})
-
-# [핵심] 스트림릿이 번호 칸을 늘리지 못하도록 width=50으로 꽉 묶어버리고, 키워드 칸에 1000을 주어 남은 공간을 모두 몰아줍니다.
+# [핵심] 선생님의 요청대로 width=1000을 명시하여 넓게 꽉 채우도록 설정했습니다. (데이터 보존을 위해 st.session_state.student_df 적용)
 edited_df = st.data_editor(
-    df,
+    st.session_state.student_df,
     column_config={
         "번호": st.column_config.TextColumn("번호", disabled=True, width=50),
         "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width=1000)
     },
     hide_index=True, use_container_width=True
 )
+
+st.session_state.student_df = edited_df
 
 st.markdown("---")
 
@@ -174,7 +190,6 @@ if st.button("🚀 전체 학생 행특 생성하기"):
     if current_num is not None:
         parsed_results[current_num] = "\n".join(current_text).strip()
         
-    # 결과 처리 시에도 번호를 문자로 인식하여 매칭합니다.
     for num, text in parsed_results.items():
         str_num = str(num)
         if str_num in result_df["번호"].values:
@@ -188,7 +203,7 @@ if st.button("🚀 전체 학생 행특 생성하기"):
 if st.session_state.result_data is not None:
     st.success("🎉 생성 완료! 표의 내용을 확인하시고 엑셀 파일로 꼭 다운로드하세요.")
     
-    # 결과 출력 표 역시 번호 칸은 최소화, 결과 칸은 최대로 고정합니다.
+    # 결과 표도 동일하게 1000픽셀 적용
     st.dataframe(
         st.session_state.result_data, 
         column_config={
