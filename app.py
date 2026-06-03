@@ -5,7 +5,7 @@ import time
 import random
 import re
 
-# [추가된 핵심 코드] 화면 가로 폭을 모니터 끝까지 넓게 써서 제목과 표가 시원하게 나오게 합니다.
+# 화면 가로 폭을 모니터 끝까지 넓게 써서 제목과 표가 시원하게 나오게 합니다.
 st.set_page_config(page_title="생기부 행특 자동화", page_icon="📝", layout="wide")
 
 st.title("📝 초등 생기부 행특 일괄 자동화 시스템")
@@ -60,11 +60,12 @@ def get_system_prompt(grade_group):
 st.markdown("### 📋 학생별 관찰 키워드 입력표")
 df = pd.DataFrame({"번호": range(1, num_students + 1), "관찰 키워드": [""] * num_students})
 
+# [수정된 부분] 열(Column)의 폭을 small(좁게), large(넓게)로 명시하여 비율을 맞췄습니다.
 edited_df = st.data_editor(
     df,
     column_config={
-        "번호": st.column_config.NumberColumn("번호", disabled=True),
-        "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150)
+        "번호": st.column_config.NumberColumn("번호", disabled=True, width="small"),
+        "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width="large")
     },
     hide_index=True, use_container_width=True
 )
@@ -181,9 +182,19 @@ if st.button("🚀 전체 학생 행특 생성하기"):
     time.sleep(1)
     my_bar.empty()
 
+# [수정된 부분] 결과 출력 표에서도 번호칸은 좁게, 결과칸은 넓게 나오도록 설정을 통일했습니다.
 if st.session_state.result_data is not None:
     st.success("🎉 생성 완료! 표의 내용을 확인하시고 엑셀 파일로 꼭 다운로드하세요.")
-    st.dataframe(st.session_state.result_data, hide_index=True, use_container_width=True)
+    
+    st.dataframe(
+        st.session_state.result_data, 
+        column_config={
+            "번호": st.column_config.NumberColumn("번호", width="small"),
+            "생성된 행특 (결과)": st.column_config.TextColumn("생성된 행특 (결과)", width="large")
+        },
+        hide_index=True, 
+        use_container_width=True
+    )
     
     csv_data = st.session_state.result_data.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
