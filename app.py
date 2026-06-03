@@ -15,40 +15,38 @@ st.info("학년군과 학생수를 설정하고 키워드를 입력하면, 전�
 if "result_data" not in st.session_state:
     st.session_state.result_data = None
 
+# [핵심 1] 뼈대가 되는 base_df와 실시간 그림자 백업용 latest_df를 나눕니다.
 if "base_df" not in st.session_state:
     st.session_state.base_df = pd.DataFrame({
         "번호": [str(i) for i in range(1, 21)], 
         "관찰 키워드": [""] * 20
     })
-
-# [핵심 방어막] 표가 새로 그려지기 직전! 스트림릿의 임시 기억 상자를 뒤져서 치고 있던 글자를 구출합니다!
-if "my_editor" in st.session_state:
-    try:
-        edits = st.session_state["my_editor"].get("edited_rows", {})
-        for row_idx, col_edits in edits.items():
-            row_idx = int(row_idx)
-            if row_idx < len(st.session_state.base_df):
-                for col_name, new_val in col_edits.items():
-                    st.session_state.base_df.at[row_idx, col_name] = new_val
-    except Exception:
-        pass
+if "latest_df" not in st.session_state:
+    st.session_state.latest_df = st.session_state.base_df.copy()
+if "prev_num_students" not in st.session_state:
+    st.session_state.prev_num_students = 20
 
 st.sidebar.header("⚙️ 기본 설정")
 grade_group = st.sidebar.selectbox("학년군을 선택하세요", ["1~2학년군", "3~4학년군", "5~6학년군"])
 
-# 학생 수 변경 로직
-num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=len(st.session_state.base_df), step=1)
+num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=st.session_state.prev_num_students, step=1)
 
-current_len = len(st.session_state.base_df)
-if num_students > current_len:
-    extra_count = num_students - current_len
-    extra_df = pd.DataFrame({
-        "번호": [str(i) for i in range(current_len + 1, num_students + 1)],
-        "관찰 키워드": [""] * extra_count
-    })
-    st.session_state.base_df = pd.concat([st.session_state.base_df, extra_df], ignore_index=True)
-elif num_students < current_len:
-    st.session_state.base_df = st.session_state.base_df.iloc[:num_students]
+# [핵심 2] 학생 수가 바뀌는 순간! 날아가기 전에 그림자 백업본을 원본으로 구출합니다.
+if num_students != st.session_state.prev_num_students:
+    st.session_state.base_df = st.session_state.latest_df.copy()
+    current_len = len(st.session_state.base_df)
+    
+    if num_students > current_len:
+        extra_count = num_students - current_len
+        extra_df = pd.DataFrame({
+            "번호": [str(i) for i in range(current_len + 1, num_students + 1)],
+            "관찰 키워드": [""] * extra_count
+        })
+        st.session_state.base_df = pd.concat([st.session_state.base_df, extra_df], ignore_index=True)
+    elif num_students < current_len:
+        st.session_state.base_df = st.session_state.base_df.iloc[:num_students]
+        
+    st.session_state.prev_num_students = num_students
 
 with st.sidebar.expander("🛠️ 비상용 고급 설정 (클릭)"):
     st.caption("사용자가 몰려 서버의 일일 무료 한도가 초과된 경우, 본인의 API 키를 직접 입력하면 계속 사용할 수 있습니다.")
@@ -89,10 +87,10 @@ def get_system_prompt(grade_group):
 
 st.markdown("### 📋 학생별 관찰 키워드 입력표")
 
-# key="my_editor" 라는 이름표를 달아서 위의 방어막 코드와 짝꿍을 맞춰줍니다.
+# [핵심 3] key(이름표)에 학생 수를 붙여서 꼬이지 않게 만들고, width 1000을 유지합니다.
 edited_df = st.data_editor(
     st.session_state.base_df,
-    key="my_editor",
+    key=f"student_table_{st.session_state.prev_num_students}",
     column_config={
         "번호": st.column_config.TextColumn("번호", disabled=True, width=50),
         "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width=1000)
@@ -100,8 +98,8 @@ edited_df = st.data_editor(
     hide_index=True, use_container_width=True
 )
 
-# 표에 무사히 들어간 글자는 확실하게 저장해둡니다.
-st.session_state.base_df = edited_df
+# [핵심 4] 선생님이 치는 모든 글자는 방해 없이 그림자 백업본(latest_df)에 실시간으로 보관됩니다.
+st.session_state.latest_df = edited_df.copy()
 
 st.markdown("---")
 
