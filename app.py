@@ -58,15 +58,15 @@ def get_system_prompt(grade_group):
 
 st.markdown("### 📋 학생별 관찰 키워드 입력표")
 
-# [수정 1] 번호를 숫자가 아닌 '문자(String)'로 변환하여 강제로 왼쪽 정렬시킵니다.
+# 번호를 숫자가 아닌 '문자(str)'로 강제 변환하여 무조건 왼쪽으로 붙게 만듭니다.
 df = pd.DataFrame({"번호": [str(i) for i in range(1, num_students + 1)], "관찰 키워드": [""] * num_students})
 
-# [수정 2] width에 150과 600을 주어 2:8 (1:4) 비율로 표 칸을 분할합니다.
+# [핵심] 스트림릿이 번호 칸을 늘리지 못하도록 width=50으로 꽉 묶어버리고, 키워드 칸에 1000을 주어 남은 공간을 모두 몰아줍니다.
 edited_df = st.data_editor(
     df,
     column_config={
-        "번호": st.column_config.TextColumn("번호", disabled=True, width=150),
-        "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width=600)
+        "번호": st.column_config.TextColumn("번호", disabled=True, width=50),
+        "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width=1000)
     },
     hide_index=True, use_container_width=True
 )
@@ -174,7 +174,7 @@ if st.button("🚀 전체 학생 행특 생성하기"):
     if current_num is not None:
         parsed_results[current_num] = "\n".join(current_text).strip()
         
-    # [수정 3] 번호가 문자열로 바뀌었으므로 검색할 때도 문자열로 비교하도록 수정합니다.
+    # 결과 처리 시에도 번호를 문자로 인식하여 매칭합니다.
     for num, text in parsed_results.items():
         str_num = str(num)
         if str_num in result_df["번호"].values:
@@ -188,12 +188,12 @@ if st.button("🚀 전체 학생 행특 생성하기"):
 if st.session_state.result_data is not None:
     st.success("🎉 생성 완료! 표의 내용을 확인하시고 엑셀 파일로 꼭 다운로드하세요.")
     
-    # [수정 4] 결과 표에서도 똑같이 2:8 비율과 왼쪽 정렬(TextColumn)을 유지합니다.
+    # 결과 출력 표 역시 번호 칸은 최소화, 결과 칸은 최대로 고정합니다.
     st.dataframe(
         st.session_state.result_data, 
         column_config={
-            "번호": st.column_config.TextColumn("번호", width=150),
-            "생성된 행특 (결과)": st.column_config.TextColumn("생성된 행특 (결과)", width=600)
+            "번호": st.column_config.TextColumn("번호", width=50),
+            "생성된 행특 (결과)": st.column_config.TextColumn("생성된 행특 (결과)", width=1000)
         },
         hide_index=True, 
         use_container_width=True
