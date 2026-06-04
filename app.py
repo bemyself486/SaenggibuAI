@@ -5,48 +5,57 @@ import time
 import random
 import re
 
-st.set_page_config(page_title="생기부 행특 자동화", page_icon="📝", layout="wide")
+# [신뢰 1] 타이틀 명칭 변경: '자동화' 대신 교사 주도권을 강조하는 '초안 정리 도우미'
+st.set_page_config(page_title="생기부 행특 초안 도우미", page_icon="📝", layout="wide")
 
-st.title("📝 초등 생기부 행특 일괄 자동화 시스템")
+st.title("📝 초등 생기부 행특 초안 정리 도우미")
 st.subheader("다인수 학급 일괄 처리 버전 (Google Gemini 탑재)")
 
-st.info("학년군과 학생수를 설정하고 키워드를 입력하면, 전체 학급 학생의 행특을 한 번에 생성합니다. (비용: 무료)")
+st.info("학년군과 학생수를 설정하고 관찰 키워드를 입력하면, 나이스(NEIS) 입력 전 참고할 수 있는 행특 초안을 생성합니다.")
+
+# --- [신뢰 2] 개인정보 입력 금지 안내 및 필수 동의 ---
+st.markdown("### 🔒 개인정보 보호 및 사용 동의")
+st.warning("본 도구는 '초안 작성'을 돕는 보조 도구입니다. 최종 기재 내용은 반드시 교사의 직접 관찰과 판단에 따라 수정되어야 합니다.")
+agree_privacy = st.checkbox("✅ [필수] 위 내용을 확인하였으며, 학생의 실명 등 식별 가능한 개인정보를 직접 입력하지 않겠습니다.")
+st.markdown("---")
+# --------------------------------------------------
 
 if "result_data" not in st.session_state:
     st.session_state.result_data = None
 
-# [핵심 1] 뼈대가 되는 base_df와 실시간 그림자 백업용 latest_df를 나눕니다.
 if "base_df" not in st.session_state:
     st.session_state.base_df = pd.DataFrame({
         "번호": [str(i) for i in range(1, 21)], 
         "관찰 키워드": [""] * 20
     })
-if "latest_df" not in st.session_state:
-    st.session_state.latest_df = st.session_state.base_df.copy()
-if "prev_num_students" not in st.session_state:
-    st.session_state.prev_num_students = 20
+
+# 작성 중 데이터 증발 방지용 (최종 보스 버그 패치 유지)
+if "my_editor" in st.session_state:
+    try:
+        edits = st.session_state["my_editor"].get("edited_rows", {})
+        for row_idx, col_edits in edits.items():
+            row_idx = int(row_idx)
+            if row_idx < len(st.session_state.base_df):
+                for col_name, new_val in col_edits.items():
+                    st.session_state.base_df.at[row_idx, col_name] = new_val
+    except Exception:
+        pass
 
 st.sidebar.header("⚙️ 기본 설정")
 grade_group = st.sidebar.selectbox("학년군을 선택하세요", ["1~2학년군", "3~4학년군", "5~6학년군"])
 
-num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=st.session_state.prev_num_students, step=1)
+num_students = st.sidebar.number_input("총 학생 수를 입력하세요", min_value=1, max_value=40, value=len(st.session_state.base_df), step=1)
 
-# [핵심 2] 학생 수가 바뀌는 순간! 날아가기 전에 그림자 백업본을 원본으로 구출합니다.
-if num_students != st.session_state.prev_num_students:
-    st.session_state.base_df = st.session_state.latest_df.copy()
-    current_len = len(st.session_state.base_df)
-    
-    if num_students > current_len:
-        extra_count = num_students - current_len
-        extra_df = pd.DataFrame({
-            "번호": [str(i) for i in range(current_len + 1, num_students + 1)],
-            "관찰 키워드": [""] * extra_count
-        })
-        st.session_state.base_df = pd.concat([st.session_state.base_df, extra_df], ignore_index=True)
-    elif num_students < current_len:
-        st.session_state.base_df = st.session_state.base_df.iloc[:num_students]
-        
-    st.session_state.prev_num_students = num_students
+current_len = len(st.session_state.base_df)
+if num_students > current_len:
+    extra_count = num_students - current_len
+    extra_df = pd.DataFrame({
+        "번호": [str(i) for i in range(current_len + 1, num_students + 1)],
+        "관찰 키워드": [""] * extra_count
+    })
+    st.session_state.base_df = pd.concat([st.session_state.base_df, extra_df], ignore_index=True)
+elif num_students < current_len:
+    st.session_state.base_df = st.session_state.base_df.iloc[:num_students]
 
 with st.sidebar.expander("🛠️ 비상용 고급 설정 (클릭)"):
     st.caption("사용자가 몰려 서버의 일일 무료 한도가 초과된 경우, 본인의 API 키를 직접 입력하면 계속 사용할 수 있습니다.")
@@ -55,7 +64,7 @@ with st.sidebar.expander("🛠️ 비상용 고급 설정 (클릭)"):
 def get_system_prompt(grade_group):
     return f"""
     당신은 대한민국 초등학교 베테랑 교사이자, '2026학년도 학교생활기록부 기재요령'을 완벽히 숙지한 전문가입니다.
-    제공된 학생들의 관찰 키워드를 바탕으로, 행동특성 및 종합의견(행특)을 지침에 맞게 작성해야 합니다.
+    제공된 학생들의 관찰 키워드를 바탕으로, 행동특성 및 종합의견(행특) 초안을 지침에 맞게 작성해야 합니다.
 
     [지출 지침: 5대 절대 준수 원칙]
     1. 작성 관점: 학생의 학습, 행동 및 인성 등 학교 교육활동 전반에서 관찰된 특성을 바탕으로 하며, 학생의 성장 정도, 특기사항, 발전 가능성을 고려한 '학생의 성장을 지원하는 교육적 관점'에서 작성합니다.
@@ -87,10 +96,9 @@ def get_system_prompt(grade_group):
 
 st.markdown("### 📋 학생별 관찰 키워드 입력표")
 
-# [핵심 3] key(이름표)에 학생 수를 붙여서 꼬이지 않게 만들고, width 1000을 유지합니다.
 edited_df = st.data_editor(
     st.session_state.base_df,
-    key=f"student_table_{st.session_state.prev_num_students}",
+    key="my_editor",
     column_config={
         "번호": st.column_config.TextColumn("번호", disabled=True, width=50),
         "관찰 키워드": st.column_config.TextColumn("관찰 키워드 (예: 산만함, 수학을 좋아함)", max_chars=150, width=1000)
@@ -98,12 +106,16 @@ edited_df = st.data_editor(
     hide_index=True, use_container_width=True
 )
 
-# [핵심 4] 선생님이 치는 모든 글자는 방해 없이 그림자 백업본(latest_df)에 실시간으로 보관됩니다.
-st.session_state.latest_df = edited_df.copy()
+st.session_state.base_df = edited_df
 
 st.markdown("---")
 
-if st.button("🚀 전체 학생 행특 생성하기"):
+if st.button("🚀 전체 학생 행특 초안 생성하기"):
+    # 동의 체크박스를 확인하는 로직
+    if not agree_privacy:
+        st.error("🚨 생성을 진행하려면 먼저 상단의 '[필수] 개인정보 보호 동의'에 체크(✅)해 주세요.")
+        st.stop()
+        
     valid_df = edited_df[edited_df["관찰 키워드"].str.strip() != ""]
     if valid_df.empty:
         st.warning("⚠️ 입력된 관찰 키워드가 없습니다.")
@@ -184,7 +196,7 @@ if st.button("🚀 전체 학생 행특 생성하기"):
     my_bar.progress(80, text="📝 작성이 완료되었습니다! 표 형식으로 예쁘게 정리 중입니다...")
         
     result_df = edited_df.copy()
-    result_df["생성된 행특 (결과)"] = ""
+    result_df["생성된 행특 초안 (결과)"] = ""
     
     parsed_results = {}
     current_num = None
@@ -207,7 +219,7 @@ if st.button("🚀 전체 학생 행특 생성하기"):
     for num, text in parsed_results.items():
         str_num = str(num)
         if str_num in result_df["번호"].values:
-            result_df.loc[result_df["번호"] == str_num, "생성된 행특 (결과)"] = text.replace("*", "").strip()
+            result_df.loc[result_df["번호"] == str_num, "생성된 행특 초안 (결과)"] = text.replace("*", "").strip()
             
     st.session_state.result_data = result_df
     my_bar.progress(100, text="🎉 모든 작업이 성공적으로 완료되었습니다!")
@@ -215,22 +227,40 @@ if st.button("🚀 전체 학생 행특 생성하기"):
     my_bar.empty()
 
 if st.session_state.result_data is not None:
-    st.success("🎉 생성 완료! 표의 내용을 확인하시고 엑셀 파일로 꼭 다운로드하세요.")
+    st.success("🎉 초안 생성이 완료되었습니다! 최종 나이스(NEIS) 입력 전, 아래 체크리스트를 확인해 주세요.")
     
+    # --- [신뢰 3] 교사 직접 검토 체크리스트 (다운로드 게이트웨이) ---
+    st.markdown("### 🔍 교사 최종 검토 체크리스트")
+    st.info("💡 기재요령 준수를 위해 아래 4개 항목을 모두 체크(✅)하셔야 엑셀 다운로드 버튼이 활성화됩니다.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        check1 = st.checkbox("1. 교사가 직접 관찰한 내용인가요?")
+        check2 = st.checkbox("2. 학생의 실명 등 민감한 개인정보가 들어가지 않았나요?")
+    with col2:
+        check3 = st.checkbox("3. 학생의 특성이 과장되거나 사실과 다르게 표현되지 않았나요?")
+        check4 = st.checkbox("4. 기재 금지어(대회, 수상, 영재원, 부모 직업 등)가 없나요?")
+    st.markdown("---")
+    # -------------------------------------------------------------
+
     st.dataframe(
         st.session_state.result_data, 
         column_config={
             "번호": st.column_config.TextColumn("번호", width=50),
-            "생성된 행특 (결과)": st.column_config.TextColumn("생성된 행특 (결과)", width=1000)
+            "생성된 행특 초안 (결과)": st.column_config.TextColumn("생성된 행특 초안 (결과)", width=1000)
         },
         hide_index=True, 
         use_container_width=True
     )
     
-    csv_data = st.session_state.result_data.to_csv(index=False).encode('utf-8-sig')
-    st.download_button(
-        label="📥 엑셀(CSV) 파일로 전체 다운로드", 
-        data=csv_data, 
-        file_name="생기부_행특_일괄생성_결과.csv", 
-        mime="text/csv"
-    )
+    # 4개가 모두 체크되었을 때만 다운로드 버튼 등장
+    if check1 and check2 and check3 and check4:
+        csv_data = st.session_state.result_data.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 엑셀(CSV) 파일로 전체 다운로드", 
+            data=csv_data, 
+            file_name="생기부_행특_초안_일괄생성_결과.csv", 
+            mime="text/csv"
+        )
+    else:
+        st.warning("🔒 다운로드 잠금: 위 체크리스트 4개를 모두 확인해주세요.")
