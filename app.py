@@ -34,13 +34,12 @@ if "my_editor" in st.session_state:
 
 
 # ==========================================
-# 1️⃣ [1단계] 기본 설정 및 동의 (카드형 UI 적용)
+# 1️⃣ 1단계: 기본 설정 및 동의
 # ==========================================
 with st.container(border=True):
     st.markdown("### 1️⃣ 1단계: 기본 설정 및 개인정보 동의")
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # [UI 개선] 화면을 3조각으로 나누어 입력칸을 왼쪽으로 예쁘게 몰아줍니다. (남는 공간은 여백)
     col_s1, col_s2, col_blank = st.columns([2, 2, 6])
     with col_s1:
         grade_group = st.selectbox("📌 학년군 선택", ["1~2학년군", "3~4학년군", "5~6학년군"])
@@ -68,10 +67,9 @@ with st.sidebar.expander("🛠️ 비상용 고급 설정 (클릭)"):
 
 
 # ==========================================
-# 2️⃣ [2단계] 데이터 입력 및 생성
+# 2️⃣ 2단계: 데이터 입력 및 생성
 # ==========================================
 if agree_privacy:
-    # 시선 유도 화살표
     st.markdown("<h2 style='text-align: center; color: #4CAF50;'>⬇️</h2>", unsafe_allow_html=True)
     
     with st.container(border=True):
@@ -142,8 +140,9 @@ if agree_privacy:
                 st.warning("⚠️ 입력된 관찰 키워드가 없습니다.")
                 st.stop()
                 
-            progress_text = "🚀 작업을 준비 중입니다..."
-            my_bar = st.progress(0, text=progress_text)
+            # --- [개선] 진행률 및 안내 문구 세분화 ---
+            my_bar = st.progress(5, text="🚀 작업을 준비 중입니다...")
+            time.sleep(0.3)
                 
             api_key_to_use = None
             if user_api_key:
@@ -160,8 +159,9 @@ if agree_privacy:
                         st.error("⚠️ 서버 금고에 API 키가 없습니다. 좌측 메뉴에 개인 키를 입력하세요.")
                         st.stop()
                         
-            my_bar.progress(20, text="🌐 구글 서버에 연결 중입니다...")
+            my_bar.progress(20, text="🌐 구글 서버에 보안 연결을 시도 중입니다...")
             genai.configure(api_key=api_key_to_use)
+            time.sleep(0.3)
             
             try:
                 available_models = []
@@ -184,6 +184,9 @@ if agree_privacy:
                 st.error(f"구글 서버 연결 중 에러가 발생했습니다: {e}")
                 st.stop()
                 
+            my_bar.progress(40, text="🔍 학생 데이터를 분석하고 기재요령 가이드라인을 세팅 중입니다...")
+            time.sleep(0.5)
+            
             student_batch_text = ""
             for _, row in valid_df.iterrows():
                 student_batch_text += f"- [{row['번호']}번 학생] 키워드: {row['관찰 키워드']}\n"
@@ -213,16 +216,37 @@ if agree_privacy:
             인사말이나 부연설명은 절대 하지 마세요.
             """
             
-            my_bar.progress(50, text="⚡ AI가 기재요령을 검토하며 일괄 작성 중입니다. (새로고침은 하지 말고 기다려주세요)")
+            my_bar.progress(50, text="⚡ AI 서버에 작성을 요청했습니다. (대기열을 통과 중입니다)")
+            
+            st.markdown("#### ⏳ 실시간 작성 현황")
+            
+            # --- [개선] 첫 글자 대기 중 안심 안내창 띄우기 ---
+            wait_msg = st.warning("⏳ **AI가 머리를 굴리는 중입니다...**\n\n입력하신 키워드를 기재요령에 맞게 분석하고 첫 문장을 구성하기까지 다소 시간이 소요될 수 있습니다. 화면이 멈춘 것이 아니니 잠시만 기다려주세요! 새로고침은 안돼요~")
+            
+            live_text_box = st.empty() 
+            response_text = ""
             
             try:
-                response = model.generate_content(bulk_prompt)
-                response_text = response.text
+                response = model.generate_content(bulk_prompt, stream=True)
+                
+                is_first_chunk = True
+                for chunk in response:
+                    # 첫 글자가 도착하는 순간 실행되는 마법!
+                    if is_first_chunk:
+                        wait_msg.empty() # 노란색 경고창을 즉시 지워버립니다.
+                        my_bar.progress(65, text="✍️ 텍스트 작성을 시작했습니다! 아래 상자를 확인하세요.")
+                        is_first_chunk = False
+                        
+                    response_text += chunk.text
+                    live_text_box.info(response_text) 
+                    
             except Exception as e:
                 st.error(f"작성 중 에러가 발생했습니다: {e}")
                 st.stop()
                 
-            my_bar.progress(80, text="📝 작성이 완료되었습니다! 표 형식으로 예쁘게 정리 중입니다...")
+            my_bar.progress(85, text="📝 작성이 완료되었습니다! 표 형식으로 예쁘게 정리 중입니다...")
+            time.sleep(1)
+            live_text_box.empty()
                 
             result_df = edited_df.copy()
             result_df["생성된 행특 초안 (결과)"] = ""
@@ -255,12 +279,14 @@ if agree_privacy:
             time.sleep(1)
             my_bar.empty()
 
+else:
+    st.info("💡 1단계의 '[필수] 개인정보 보호 동의'에 체크(✅)하시면 2단계 입력창이 나타납니다.")
+
 
 # ==========================================
-# 3️⃣ [3단계] 결과 확인 및 다운로드
+# 3️⃣ 3단계: 결과 확인 및 다운로드
 # ==========================================
 if st.session_state.result_data is not None:
-    # 시선 유도 화살표
     st.markdown("<h2 style='text-align: center; color: #4CAF50;'>⬇️</h2>", unsafe_allow_html=True)
     
     with st.container(border=True):
