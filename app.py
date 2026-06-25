@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="생기부 행특 초안 도우미", page_icon="📝", layout="wide")
 
-st.title("📝 초등 생기부 행특 초안 정리 도우미")
+st.title("📝 초등 생기부 행특 초안 작성 도우미 (made by 배워서남준이)")
 st.subheader("다인수 학급 일괄 처리 버전 (Google Gemini 탑재)")
 st.info("아래 안내에 따라 단계별로 천천히 진행해 주세요.")
 
