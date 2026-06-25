@@ -241,7 +241,13 @@ if agree_privacy:
                     live_text_box.info(response_text) 
                     
             except Exception as e:
-                st.error(f"작성 중 에러가 발생했습니다: {e}")
+                error_msg = str(e).lower()
+                # 429 에러(한도 초과)를 감지하면 친절한 안내문 출력
+                if "429" in error_msg or "quota" in error_msg or "rate limit" in error_msg:
+                    st.error("🚨 **서버의 일일 무료 사용량이 초과되어 잠시 멈췄습니다!**\n\n왼쪽 사이드바의 **[🛠️ 비상용 고급 설정]** 칸에 선생님의 **개인 API 키**를 입력하시면 지금 바로 이어서 정상 작동합니다. (새로고침하지 마시고 키만 입력 후 생성 버튼을 다시 눌러주세요!)")
+                else:
+                    # 다른 알 수 없는 에러일 경우 기존처럼 출력
+                    st.error(f"작성 중 알 수 없는 에러가 발생했습니다: {e}")
                 st.stop()
                 
             my_bar.progress(85, text="📝 작성이 완료되었습니다! 표 형식으로 예쁘게 정리 중입니다...")
